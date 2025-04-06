@@ -23,7 +23,7 @@ struct Population {
 }
 
 impl Population {
-    fn new(pop_size: u32, things: &Vec<Thing>, weight_limit: u32) -> Population {
+    fn new(pop_size: u32, things: &[Thing], weight_limit: u32) -> Population {
         let data = (0..pop_size)
             .map(|_| Genome::new(things, weight_limit))
             .collect();
@@ -51,12 +51,12 @@ struct Genome {
 }
 
 impl Genome {
-    fn new(things: &Vec<Thing>, weight_limit: u32) -> Genome {
+    fn new(things: &[Thing], weight_limit: u32) -> Genome {
         let mut rng = rng();
         let data = (0..things.len()).map(|_| rng.random_range(0..=1)).collect();
         Genome {
             data,
-            things: things.clone(),
+            things: things.to_owned(),
             weight_limit,
         }
     }
@@ -118,8 +118,8 @@ impl PartialOrd for Genome {
 }
 
 fn single_point_crossover(pair: &mut [Genome]) -> (Genome, Genome) {
-    let mut a = pair.get_mut(0).unwrap().clone();
-    let mut b = pair.get_mut(1).unwrap().clone();
+    let mut a = pair.first().unwrap().clone();
+    let mut b = pair.last().unwrap().clone();
     let mut rng = rng();
     let length = a.data.len();
     let cut_point = rng.random_range(0..length);
