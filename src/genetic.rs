@@ -1,9 +1,9 @@
-pub trait Selection<T> {
-    fn selection(&self, size: usize) -> T;
+pub trait Selection {
+    fn selection(&self, size: usize) -> Self;
 }
 
-pub trait Fitness {
-    fn fitness(&self) -> u32;
+pub trait Fitness<T> {
+    fn fitness(&self) -> T;
 }
 
 pub trait Mutate {

@@ -9,8 +9,8 @@ struct Thing {
 }
 
 impl Thing {
-    fn new(name: &str, value: u32, weight: u32) -> Thing {
-        Thing {
+    fn new(name: &str, value: u32, weight: u32) -> Self {
+        Self {
             _name: name.to_string(),
             value,
             weight,
@@ -24,17 +24,15 @@ struct Population {
 }
 
 impl Population {
-    fn new(pop_size: u32, things: &[Thing], weight_limit: u32) -> Population {
-        let data = (0..pop_size)
-            .map(|_| Genome::new(things, weight_limit))
-            .collect();
+    fn new(pop_size: u32, things: &[Thing], limit: u32) -> Self {
+        let data = (0..pop_size).map(|_| Genome::new(things, limit)).collect();
 
-        Population { data }
+        Self { data }
     }
 }
 
-impl genetic::Selection<Population> for Population {
-    fn selection(&self, size: usize) -> Population {
+impl genetic::Selection for Population {
+    fn selection(&self, size: usize) -> Self {
         let mut rng = rng();
         let data: Vec<Genome> = self
             .data
@@ -42,7 +40,7 @@ impl genetic::Selection<Population> for Population {
             .unwrap()
             .cloned()
             .collect();
-        Population { data }
+        Self { data }
     }
 }
 
@@ -50,22 +48,22 @@ impl genetic::Selection<Population> for Population {
 struct Genome {
     data: Vec<u32>,
     things: Vec<Thing>,
-    weight_limit: u32,
+    limit: u32,
 }
 
 impl Genome {
-    fn new(things: &[Thing], weight_limit: u32) -> Genome {
+    fn new(things: &[Thing], limit: u32) -> Self {
         let mut rng = rng();
         let data = (0..things.len()).map(|_| rng.random_range(0..=1)).collect();
-        Genome {
+        Self {
             data,
             things: things.to_owned(),
-            weight_limit,
+            limit,
         }
     }
 }
 
-impl genetic::Fitness for Genome {
+impl genetic::Fitness<u32> for Genome {
     fn fitness(&self) -> u32 {
         let mut weight = 0;
         let mut value = 0;
@@ -74,7 +72,7 @@ impl genetic::Fitness for Genome {
             .iter()
             .enumerate()
             .map_while(|(i, thing)| {
-                if weight + self.data[i] * thing.weight <= self.weight_limit {
+                if weight + self.data[i] * thing.weight <= self.limit {
                     weight += self.data[i] * thing.weight;
                     value += self.data[i] * thing.value;
                     Some((weight, value))
@@ -183,7 +181,7 @@ fn run_evolution(
 }
 
 pub fn run() {
-    let weight_limit = 3000;
+    let limit = 3000;
     let things = vec![
         Thing::new("Laptop", 500, 2200),
         Thing::new("Headphones", 150, 160),
@@ -197,7 +195,7 @@ pub fn run() {
         Thing::new("Baseball Cap", 100, 70),
     ];
 
-    let mut population = Population::new(10, &things, weight_limit);
+    let mut population = Population::new(10, &things, limit);
     let solution = run_evolution(&mut population, 1310, 1000).expect("no solution found");
 
     println!(
