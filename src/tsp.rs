@@ -1,11 +1,11 @@
 use core::f64;
-use rayon::prelude::*;
 
 use crate::genetic::{Crossover, Fitness, Mutate, Selection};
 use rand::seq::{IndexedRandom, SliceRandom};
 use rand::{Rng, rng};
 
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
 struct Thing {
     name: String,
     x: f64,
@@ -13,14 +13,6 @@ struct Thing {
 }
 
 impl Thing {
-    fn new(name: &str, x: f64, y: f64) -> Self {
-        Self {
-            name: name.to_string(),
-            x,
-            y,
-        }
-    }
-
     fn distance(&self, other: &Thing) -> f64 {
         let x = self.x - other.x;
         let y = self.y - other.y;
@@ -102,13 +94,29 @@ impl PartialOrd for Genome {
 #[derive(Debug, Clone)]
 struct Population {
     data: Vec<Genome>,
+    things: Vec<Thing>,
+    best: f64,
+    generation_since_improvement: usize,
 }
 
 impl Population {
     fn new(pop_size: u32, things: &[Thing]) -> Self {
         let data = (0..pop_size).map(|_| Genome::new(things)).collect();
 
-        Self { data }
+        Self {
+            data,
+            things: things.to_vec(),
+            best: f64::MAX,
+            generation_since_improvement: 0,
+        }
+    }
+
+    fn reset_with_best(&mut self) {
+        self.generation_since_improvement = 0;
+        let mut new = Self::new((self.data.len() - 1) as u32, &self.things);
+        self.data.drain(1..self.data.len());
+        self.data.append(&mut new.data);
+        self.data.sort()
     }
 }
 
@@ -122,7 +130,13 @@ impl Selection for Population {
             .unwrap()
             .cloned()
             .collect();
-        Self { data }
+
+        Self {
+            data,
+            things: self.things.clone(),
+            best: f64::MAX,
+            generation_since_improvement: 0,
+        }
     }
 }
 
@@ -167,6 +181,26 @@ fn run_evolution(
 ) -> Option<(&Genome, usize)> {
     for i in 0..generation_limit {
         population.data.sort();
+
+        // check best fitness
+        println!(
+            "generation: {} | population size: {} | best solution so far: {} | last improvement: {}",
+            i,
+            population.data.len(),
+            population.best,
+            population.generation_since_improvement
+        );
+        if population.best == population.data.first().unwrap().fitness() {
+            population.generation_since_improvement += 1
+        } else if population.data.first().unwrap().fitness() < population.best {
+            population.best = population.data.first().unwrap().fitness();
+        }
+
+        if population.generation_since_improvement > 50 {
+            population.reset_with_best();
+        }
+
+        // finish cond
         if population.data.first().unwrap().fitness() <= target && target > 0.0 {
             return Some((population.data.first().unwrap(), i));
         }
@@ -191,12 +225,6 @@ fn run_evolution(
             new_population.data.push(pair.b.to_owned());
         }
 
-        // dbg!(
-        //     "generation {} best: {:?} from population of {}",
-        //     i,
-        //     new_population.data.first().unwrap().fitness(),
-        //     new_population.data.len(),
-        // );
         *population = new_population;
     }
 
@@ -213,28 +241,13 @@ fn read_csv(path: &str) -> Vec<Thing> {
         .collect::<Vec<Thing>>()
 }
 
+fn read_tsp(path: &str) -> Vec<Thing> {
+    todo!()
+}
+
 pub fn run() {
     let things = read_csv("data/uk-cities.csv");
-    let mut distances: Vec<Genome> = vec![];
-    (0..100)
-        .into_par_iter()
-        .map(|_| {
-            let mut population = Population::new(300, &things);
-            let solution = run_evolution(&mut population, 50.0, 100).expect("no solution found");
-            println!("solution: {} - {:?}", solution.0.fitness(), solution.0.data);
-            solution.0.clone()
-        })
-        .collect_into_vec(&mut distances);
-
-    let mut min = f64::MAX;
-    let mut best = distances.first().unwrap().to_owned();
-    for d in distances {
-        let dist = d.fitness();
-        if dist < min {
-            min = dist;
-            best = d
-        }
-    }
-
-    println!("best solution was: {} - {:?}", min, best.data)
+    let mut population = Population::new(500, &things);
+    let solution = run_evolution(&mut population, 0.0, 1000).expect("no solution found");
+    println!("solution: {} - {:?}", solution.0.fitness(), solution.0.data);
 }
