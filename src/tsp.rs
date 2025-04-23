@@ -1,8 +1,11 @@
 use core::f64;
+use std::fs::File;
+use std::io::BufRead;
 
 use crate::genetic::{Crossover, Fitness, Mutate, Selection};
 use rand::seq::{IndexedRandom, SliceRandom};
 use rand::{Rng, rng};
+use textplots::{Chart, Plot, Shape};
 
 #[derive(Debug, Clone, serde::Deserialize)]
 #[allow(dead_code)]
@@ -13,6 +16,10 @@ struct Thing {
 }
 
 impl Thing {
+    fn new(name: String, x: f64, y: f64) -> Self {
+        Thing { name, x, y }
+    }
+
     fn distance(&self, other: &Thing) -> f64 {
         let x = self.x - other.x;
         let y = self.y - other.y;
@@ -182,18 +189,20 @@ fn run_evolution(
     for i in 0..generation_limit {
         population.data.sort();
 
-        // check best fitness
-        println!(
-            "generation: {} | population size: {} | best solution so far: {} | last improvement: {}",
-            i,
-            population.data.len(),
-            population.best,
-            population.generation_since_improvement
-        );
         if population.best == population.data.first().unwrap().fitness() {
             population.generation_since_improvement += 1
         } else if population.data.first().unwrap().fitness() < population.best {
             population.best = population.data.first().unwrap().fitness();
+            population.generation_since_improvement = 0;
+
+            // plot best fitness
+            plot(population.data.first().unwrap());
+            println!(
+                "generation: {} | population size: {} | best solution so far: {}",
+                i,
+                population.data.len(),
+                population.best,
+            );
         }
 
         if population.generation_since_improvement > 50 {
@@ -231,6 +240,7 @@ fn run_evolution(
     Some((population.data.first().unwrap(), 0))
 }
 
+#[allow(dead_code)]
 fn read_csv(path: &str) -> Vec<Thing> {
     let mut rdr = csv::Reader::from_path(path).expect("failed to open csv");
     rdr.deserialize()
@@ -241,13 +251,70 @@ fn read_csv(path: &str) -> Vec<Thing> {
         .collect::<Vec<Thing>>()
 }
 
+#[allow(dead_code)]
 fn read_tsp(path: &str) -> Vec<Thing> {
-    todo!()
+    let file = File::open(path).expect("failed to open file");
+    let mut lines = std::io::BufReader::new(file).lines();
+
+    loop {
+        let value = lines.next().unwrap().unwrap();
+        if value.ne("NODE_COORD_SECTION") {
+            continue;
+        } else {
+            break;
+        }
+    }
+
+    let mut triples: Vec<Thing> = vec![];
+    loop {
+        let value = lines.next().unwrap().unwrap();
+        if value.ne("EOF") {
+            let parts: Vec<&str> = value.splitn(3, " ").collect();
+            triples.push(Thing::new(
+                parts.first().unwrap().to_string(),
+                parts.get(1).unwrap().parse::<f64>().unwrap(),
+                parts.last().unwrap().parse::<f64>().unwrap(),
+            ));
+        } else {
+            break;
+        }
+    }
+
+    triples
+}
+
+fn plot(genome: &Genome) {
+    let mut tuples: Vec<(f32, f32)> = vec![];
+    genome.data.iter().for_each(|id| {
+        let things = genome.things.get(*id).unwrap();
+        tuples.push((things.x as f32, things.y as f32));
+    });
+    let last_pt = genome.things.get(*genome.data.first().unwrap()).unwrap();
+    tuples.push((last_pt.x as f32, last_pt.y as f32));
+
+    let min_x = tuples
+        .iter()
+        .min_by(|x1, x2| x1.0.total_cmp(&x2.0))
+        .unwrap()
+        .0;
+    let max_x = tuples
+        .iter()
+        .max_by(|x1, x2| x1.0.total_cmp(&x2.0))
+        .unwrap()
+        .0;
+
+    print!("{}[2J", 27 as char);
+    Chart::new(320, 140, min_x, max_x)
+        .lineplot(&Shape::Points(tuples.as_slice()))
+        .lineplot(&Shape::Lines(tuples.as_slice()))
+        .display();
 }
 
 pub fn run() {
-    let things = read_csv("data/uk-cities.csv");
+    let things = read_tsp("data/xqf131.tsp");
+    // let things = read_csv("data/uk-cities.csv");
     let mut population = Population::new(500, &things);
-    let solution = run_evolution(&mut population, 0.0, 1000).expect("no solution found");
+    let solution = run_evolution(&mut population, 0.0, 10000).expect("no solution found");
+    plot(solution.0);
     println!("solution: {} - {:?}", solution.0.fitness(), solution.0.data);
 }
